@@ -1,6 +1,6 @@
 {
     "name": "w001y/gamifyws",
-    "type": "gamifyws",
+    "type": "gamifyws-php-api",
     "description": "A PHP library for the Gamify.WS gamification API.",
     "keywords": ["GamifyWS", "gamification", "api"],
     "homepage": "http://gamify.ws/#api_doco",
@@ -14,7 +14,7 @@
     "require": {
         "php": ">=5.0.0"
     },
-    "target-dir": "w001y/gamifyws",
+
     "autoload": {
         "psr-0": { "w001y\\gamifyws\\": "" }
     }
