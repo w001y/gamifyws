@@ -15,6 +15,6 @@
         "php": ">=5.0.0"
     },
     "autoload": {
-        "files": ["vendor/w001y/gamifyws.php"]
+        "files": ["gamifyws.php"]
     }
 }
