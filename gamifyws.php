@@ -24,7 +24,7 @@ class gamifyws {
     /**
      * API Domain URL
      */
-    var $master_url = "http://gamify.ws";
+    var $master_url = "https://gamify.ws";
 
     /**
      * Default to a 300 second timeout on server calls
