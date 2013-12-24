@@ -7,7 +7,7 @@ namespace gamifyws;
  *
  * This is a PHP library for the gamify.ws Gamification Web service API.
  *
- * Questions? Tweet me @w001y - I'll get back to you asap..
+ * Questions? Tweet me @gamifyws - I'll get back to you asap..
  *
  * Reckon you can do a better job, or spin one up using a different language, or a certain framework?
  * Please do, that would rule - drop me a tweet! @w001y
@@ -44,11 +44,19 @@ class gamifyws {
 
     var $secure = false;
 
+
+    /**
+     * The gamify.ws token
+     */
+
+
     /**
      * Connect to the GamifyWS API for a given account.
      *
-     * @param string $ns        Your GamifyWS namespace
-     * @param string $secure    Whether or not this should use a secure connection
+     * @param $ns
+     * @param $api_key
+     * @param $api_secret
+     * @param bool $secure
      */
     function __construct($ns, $api_key, $api_secret, $secure=false) {
         $this->secure   = $secure;
@@ -56,6 +64,23 @@ class gamifyws {
         $this->ns       = $ns;
         $this->api_key  = $api_key;
         $this->api_secret = $api_secret;
+
+
+        if(!isset($_SESSION['salt']))
+        {
+            $json           = $this->get_salt();
+            $json_object    = json_decode($json);
+            if(!isset($json_object->data->salt) || (trim($json_object->data->salt) == ""))
+            {
+                echo $json_object;
+                exit;
+            }
+
+            $_SESSION['salt'] = $json_object->data->salt;
+        }
+
+        $this->token = $this->get_token($_SESSION['salt']);
+
     }
 
 
@@ -193,18 +218,27 @@ class gamifyws {
     }
 
 
-
-
     /**
-     * Get awarded actions.
+     * Get awarded actions / action_groups / badges / levels / points.
      *
-     * @param array $params - please see doco for allowed params. Used for filtering & searching.
-     * @return json
+     * @param $object_type
+     * @param int $limit
+     * @param int $offset
+     * @param null $user_id
+     * @param $object_name
+     * @return mixed|string
      */
-    public function get_awarded($object, $params = array())
+    public function get_awarded($object_type, $limit = 100, $offset = 0, $user_id = null, $object_name = null)
     {
-        $params['verb']     = 'GET';
-        return $this->api($object."_awarded", $params);
+        $params['verb']         = 'GET';
+        $params['limit']        = $limit;
+        $params['offset']       = $offset;
+        $params['user_id']      = $user_id;
+
+        $object = substr($object_type,0,-1);
+        $params[$object] = $object_name;
+
+        return $this->api($object_type."_awarded", $params);
     }
 
 
@@ -222,48 +256,229 @@ class gamifyws {
 
 
     /**
-     * Create or update an action.
+     * Create an action.
      *
-     * Simply add an 'update' param to update an existing object.
-     *
-     * @param $params - please see doco for required params.
-     * @return json
+     * @param $action_name
+     * @return mixed|string
      */
-    public function create_action($params)
+    public function create_action($action_name)
     {
-        $params['verb']     = 'POST';
+        $params                 = array();
+        $params['verb']         = 'POST';
+        $params['token']        = $this->token;
+        $params['action_name']  = $action_name;
         return $this->api('actions', $params);
     }
 
 
+    /**
+     *
+     * Update an action.
+     *
+     * @param $action_name
+     * @param null $new_name
+     * @return mixed|string
+     */
+    public function update_action($action_name, $new_name = null)
+    {
+        $params                 = array();
+        $params['verb']         = 'POST';
+        $params['token']        = $this->token;
+        $params['action_name']  = $action_name;
+        $params['update']       = 'true';
+        $params['new_name']     = $new_name;
+        return $this->api('actions', $params);
+    }
+
+
+    /**
+     *
+     * Deactivate an action.
+     *
+     * @param $action_name
+     * @return mixed|string
+     */
+    public function deactivate_action($action_name)
+    {
+        $params                 = array();
+        $params['verb']         = 'POST';
+        $params['token']        = $this->token;
+        $params['action_name']  = $action_name;
+        $params['update']       = 'true';
+        $params['active']       = '0';
+        return $this->api('actions', $params);
+    }
+
+
+    /**
+     *
+     * Activate an action.
+     *
+     * @param $action_name
+     * @return mixed|string
+     */
+    public function activate_action($action_name)
+    {
+        $params                 = array();
+        $params['verb']         = 'POST';
+        $params['token']        = $this->token;
+        $params['action_name']  = $action_name;
+        $params['update']       = 'true';
+        $params['active']       = '1';
+        return $this->api('actions', $params);
+    }
 
 
     /**
      * Create an action group.
-     *
-     * Simply add an 'update' param to update an existing object.
-     *
-     * @param $params - please see doco for required params.
-     * @return json
      */
-    public function create_action_group($params)
+
+    /**
+     * @param $action_group_name
+     * @param null $actions
+     *
+     * $actions needs to be a pipe-delimited list of actions. Actions themselves are comma delimited lists in the following format:
+     *
+     * [type (A or AG for action or action group],[Action Name],[Number of attainments to fulfil action group]
+     *
+     * Simple example:
+     * A,User Logs In,3
+     *
+     * Advanced Example:
+     * A,User Logs In,3|AG,Signup Action Group,1|A,User Validates Account,1
+     *
+     *
+     * @param string $multi
+     *
+     * BE VERY CAREFUL With $multi - setting it to '1' allows the action to be attained multiple times, possibly giving the user a lot of points.
+     *
+     * @return mixed|string
+     */
+    public function create_action_group($action_group_name, $actions = null, $multi = '0')
     {
-        $params['verb']     = 'POST';
+        $params['verb']                 = 'POST';
+        $params['token']                = $this->token;
+        $params['action_group_name']    = $action_group_name;
+        $params['actions']              = $actions;
+        $params['multi']                = $actions;
         return $this->api('action_groups', $params);
+    }
+
+    /**
+     * Update an action group name
+     *
+     * @param $action_group_name
+     * @param null $new_name
+     * @return mixed|string
+     */
+    public function update_action_group($action_group_name, $new_name = null)
+    {
+        $params['verb']                 = 'POST';
+        $params['token']                = $this->token;
+        $params['action_group_name']    = $action_group_name;
+        $params['new_name']             = $new_name;
+        $params['update']               = 'true';
+        return $this->api('action_groups', $params);
+    }
+
+    /**
+     * Update an action group's actions.
+     *
+     * Note that your actions as specified here are appended to the existing actions.
+     * If you need to delete actions from the action group, you are best rebuilding the action group from the ground up.
+     *
+     * @param $action_group_name
+     * @param null $actions
+     * @return mixed|string
+     */
+    public function update_action_group_actions($action_group_name, $actions = null)
+    {
+        $params['verb']                 = 'POST';
+        $params['token']                = $this->token;
+        $params['action_group_name']    = $action_group_name;
+        $params['actions']              = $actions;
+        $params['update']               = 'true';
+        return $this->api('action_groups', $params);
+    }
+
+
+    public function deactivate_action_group($action_group_name)
+    {
+        $params                         = array();
+        $params['verb']                 = 'POST';
+        $params['token']                = $this->token;
+        $params['action_group_name']    = $action_group_name;
+        $params['update']               = 'true';
+        $params['active']               = '0';
+        return $this->api('actions', $params);
+    }
+
+    public function activate_action_group($action_group_name)
+    {
+        $params                         = array();
+        $params['verb']                 = 'POST';
+        $params['token']                = $this->token;
+        $params['action_group_name']    = $action_group_name;
+        $params['update']               = 'true';
+        $params['active']               = '1';
+        return $this->api('actions', $params);
     }
 
 
     /**
      * Create a level.
      *
-     * Simply add an 'update' param to update an existing object.
-     *
-     * @param $params - please see doco for required params.
-     * @return json
+     * @param $level_name
+     * @param $num_points
+     * @return mixed|string
      */
-    public function create_level($params)
+    public function create_level($level_name, $num_points)
     {
-        $params['verb']     = 'POST';
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['level_name']       = $level_name;
+        $params['points']           = $num_points;
+        return $this->api('levels', $params);
+    }
+
+
+    public function update_level($level_name, $new_level_name)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['level_name']       = $level_name;
+        $params['new_name']         = $new_level_name;
+        $params['update']           = 'true';
+        return $this->api('levels', $params);
+    }
+
+    public function update_level_points($level_name, $num_points)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['level_name']       = $level_name;
+        $params['points']           = $num_points;
+        $params['update']           = 'true';
+        return $this->api('levels', $params);
+    }
+
+    public function deactivate_level($level_name)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['level_name']       = $level_name;
+        $params['active']           = "0";
+        $params['update']           = 'true';
+        return $this->api('levels', $params);
+    }
+
+    public function activate_level($level_name)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['level_name']       = $level_name;
+        $params['active']           = "1";
+        $params['update']           = 'true';
         return $this->api('levels', $params);
     }
 
@@ -271,26 +486,97 @@ class gamifyws {
     /**
      * Create a badge.
      *
-     * Simply add an 'update' param to update an existing object.
-     *
-     * @param $params - please see doco for required params.
-     * @return json
+     * @param $badge_name
+     * @param $url - URL of the PNG resource (most be a PNG!)
+     * @param $badge_type - "points" or "action_group"
+     * @param $badge_value - if $badge_type is points, must be a positive integer. If action_group, supply action group name.
+     * @return mixed|string
      */
-    public function create_badge($params)
+    public function create_badge($badge_name, $url, $badge_type, $badge_value)
     {
-        $params['verb']     = 'POST';
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['badge_name']       = $badge_name;
+        $params['url']              = $url;
+        $params['badge_type']       = $badge_type;
+        $params['badge_value']      = $badge_value;
         return $this->api('badges', $params);
     }
+
+
+    public function update_badge($badge_name, $new_name)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['badge_name']       = $badge_name;
+        $params['update']           = 'true';
+        $params['new_name']         = $new_name;
+        return $this->api('badges', $params);
+    }
+
+    public function update_badge_image($badge_name, $url)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['badge_name']       = $badge_name;
+        $params['update']           = 'true';
+        $params['url']              = $url;
+        return $this->api('badges', $params);
+    }
+
+    public function update_badge_type($badge_name, $badge_type, $new_value)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['badge_name']       = $badge_name;
+        $params['update']           = 'true';
+        $params['badge_type']       = $badge_type;
+        $params['badge_value']      = $new_value;
+        return $this->api('badges', $params);
+    }
+
+    public function deactivate_badge($badge_name)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['badge_name']       = $badge_name;
+        $params['update']           = 'true';
+        $params['active']           = '0';
+        return $this->api('badges', $params);
+    }
+
+    public function activate_badge($badge_name)
+    {
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['badge_name']       = $badge_name;
+        $params['update']           = 'true';
+        $params['active']           = '1';
+        return $this->api('badges', $params);
+    }
+
 
     /**
      * Register an event.
      *
-     * @param $params - please see doco for required params.
-     * @return json
+     * Note that in order for the API to allow users to carry out actions more than once, $element_id must be set.
+     *
+     * @param $action
+     * @param $user_id
+     * @param null $user_name
+     * @param null $element_id
+     * @param null $user_icon_url
+     * @return mixed|string
      */
-    public function register_event($params)
+    public function register_event($action, $user_id, $element_id = null, $user_name = null, $user_icon_url = null)
     {
-        $params['verb']     = 'POST';
+        $params['verb']             = 'POST';
+        $params['token']            = $this->token;
+        $params['action']           = $action;
+        $params['user_id']          = $user_id;
+        $params['user_name']        = $user_name;
+        $params['element_id']       = $element_id;
+        $params['user_icon_url']    = $user_icon_url;
         return $this->api('events', $params);
     }
 
@@ -321,6 +607,10 @@ class gamifyws {
 
     private function api_send($url, $params)
     {
+        $object = $params['object'];
+
+        // Disallow the object param from being sent to the API
+        unset($params['object']);
 
         $fields_string = "";
         foreach($params as $key=>$value) {
@@ -348,19 +638,23 @@ class gamifyws {
         // create curl resource
         $ch = curl_init();
 
+        // SSL
+        curl_setopt($ch, CURLOPT_SSLVERSION,3);
+
         if($params['verb'] == "POST")
         {
-            $url = $this->api_url.$params['object'];
+            $url = $this->api_url.$object;
         }
         else
         {
-            $url = $this->api_url.$params['object']."/".$this->ns;
+            $url = $this->api_url.$object."/".$this->ns;
         }
 
         if($params['verb'] == "POST")
         {
             curl_setopt($ch,CURLOPT_POST, count($params));
             curl_setopt($ch,CURLOPT_POSTFIELDS, $fields_string);
+
         }
         else
         {
@@ -378,8 +672,11 @@ class gamifyws {
         // $output contains the output string
         $output = curl_exec($ch);
 
+        $error = curl_error($ch);
 
-        /*echo $url."<br />";
+        /*
+        // A bit of debug
+        echo $url."<br />";
         var_dump($fields_string);
         echo "<br />----<br />";
         echo $output;
@@ -388,6 +685,13 @@ class gamifyws {
 
         // close curl resource to free up system resources
         curl_close($ch);
+
+
+        if(isset($error) && (trim($error) != ""))
+        {
+            $output = $error;
+        }
+
 
         return $output;
     }
