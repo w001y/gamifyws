@@ -354,7 +354,7 @@ class gamifyws {
      *
      * @return mixed|string
      */
-    public function create_action_group($action_group_name, $actions = null, $multi = '0')
+    public function create_action_group($action_group_name, $actions = null, $multi = null)
     {
         $params['verb']                 = 'POST';
         $params['token']                = $this->token;
