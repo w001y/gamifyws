@@ -360,7 +360,7 @@ class gamifyws {
         $params['token']                = $this->token;
         $params['action_group_name']    = $action_group_name;
         $params['actions']              = $actions;
-        $params['multi']                = $actions;
+        $params['multi']                = $multi;
         return $this->api('action_groups', $params);
     }
 
