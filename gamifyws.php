@@ -594,7 +594,7 @@ class gamifyws {
      */
 
 
-    private function api($object, $params)
+    public function api($object, $params)
     {
         $params['ns'] 	    = $this->ns;
         $params['object'] 	= $object;
